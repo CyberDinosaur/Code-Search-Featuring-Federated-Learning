@@ -44,7 +44,7 @@ def train(args, model, tokenizer):
             nl_inputs = batch[1].to(args.device)
             # Get code and nl vectors
             code_vec = model(code_inputs = code_inputs)
-            nl_vec = model(nl_inputs = nl_inputs)
+            nl_vec = model(nl_inputs = nl_inputs)   
             print('--------------------id:3---------------------')
             # Calculate scores and loss
             scores = torch.einsum("ab, cb->ac",nl_vec,code_vec)
