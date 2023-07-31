@@ -1,0 +1,11 @@
+# Evaluating
+lang: 'python'
+output_dir: saved_models/CSN/${lang}
+do_eval: true
+do_test: true
+do_train: false
+do_zero_shot: false
+eval_data_file: dataset/CSN/${lang}/valid.jsonl
+test_data_file: dataset/CSN/${lang}/test.jsonl
+codebase_file: dataset/CSN/${lang}/codebase.jsonl
+num_train_epochs: 10

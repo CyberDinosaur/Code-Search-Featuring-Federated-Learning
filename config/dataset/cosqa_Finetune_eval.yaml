@@ -1,0 +1,10 @@
+# Evaluating
+output_dir: saved_models/cosqa
+do_eval: true
+do_test: true
+do_train: false
+do_zero_shot: false
+eval_data_file: dataset/cosqa/cosqa-retrieval-dev-500.json
+test_data_file: dataset/cosqa/cosqa-retrieval-test-500.json
+codebase_file: dataset/cosqa/code_idx_map.txt
+num_train_epochs: 10

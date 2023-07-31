@@ -1,0 +1,9 @@
+# Evaluating
+output_dir: saved_models/AdvTest
+do_eval: false
+do_test: true
+do_train: false
+do_zero_shot: false
+test_data_file: dataset/AdvTest/test.jsonl
+codebase_file: dataset/AdvTest/test.jsonl
+num_train_epochs: 2

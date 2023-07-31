@@ -1,0 +1,9 @@
+lang: 'python'
+output_dir: saved_models/CSN/${lang}
+do_eval: false
+do_test: true
+do_train: false
+do_zero_shot: true
+test_data_file: dataset/CSN/${lang}/test.jsonl
+codebase_file: dataset/CSN/${lang}/codebase.jsonl
+num_train_epochs: 10

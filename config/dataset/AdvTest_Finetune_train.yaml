@@ -1,0 +1,10 @@
+# Training
+output_dir: saved_models/AdvTest
+do_eval: false
+do_test: false
+do_train: true
+do_zero_shot: false
+train_data_file: dataset/AdvTest/train.jsonl
+eval_data_file: dataset/AdvTest/valid.jsonl
+codebase_file: dataset/AdvTest/valid.jsonl
+num_train_epochs: 2
