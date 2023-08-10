@@ -1,0 +1,5 @@
+num_comm: 3
+num_of_clients: 3
+val_freq: 5
+cfraction: 0.1
+isIID: true

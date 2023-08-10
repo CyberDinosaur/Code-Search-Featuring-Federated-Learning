@@ -2,15 +2,84 @@ import logging
 import os
 import torch
 import numpy as np
+import tqdm
 
 from model_pipeline.data import TextDataset
+from model_pipeline.clients import ClientsGroup
 
 from torch.nn import CrossEntropyLoss, MSELoss
 from torch.utils.data import DataLoader, Dataset, SequentialSampler, RandomSampler,TensorDataset
 from transformers import (WEIGHTS_NAME, get_linear_schedule_with_warmup)
 
-
 logger = logging.getLogger(__name__)                        
+
+def distributed_train(args, model, tokenizer):
+    """ Train the model in a distributed manner"""
+    # Get training dataset
+    train_dataset = TextDataset(tokenizer, args, args.dataset['train_data_file'])
+       
+    # Create Clients Group
+    myClients = ClientsGroup(train_dataset, args.training['isIID'], args.training['num_of_clients'], args.device)
+    num_in_comm = int(max(args.training['num_of_clients'] * args.training['cfraction'], 1))
+
+    # Train!
+    logger.info("***** Running training *****")
+    logger.info("  Num total examples = %d", len(train_dataset))
+    logger.info("  Num Clients = %d", args.training['num_of_clients'])
+    logger.info("  Num communications between Server and Clients = %d", num_in_comm)
+    logger.info("  Train batch size for each client = %d", args.train_batch_size)
+    model.zero_grad()
+    model.train()
+    
+    # Create Global parameters and Update global parameters distributively
+    global_parameters = {}
+    for key, var in model.state_dict().items():
+        global_parameters[key] = var.clone()
+        
+    for i in range(args.training['num_comm']):
+        logger.info("Communicate round {}".format(i+1))
+        # Pick clients_in_comm
+        order = np.random.permutation(args.training['num_of_clients'])
+        clients_in_comm = ['client{}'.format(i) for i in order[0:num_in_comm]]
+        # Local update
+        sum_parameters = None
+        for client in (clients_in_comm):
+            local_parameters = myClients.clients_set[client].localUpdate(
+                model, args.dataset['num_train_epochs'], args.train_batch_size, 
+                args.learning_rate, args.max_grad_norm, global_parameters)
+            if sum_parameters is None:
+                sum_parameters = {}
+                for key, var in local_parameters.items():
+                    sum_parameters[key] = var.clone()
+            else:
+                for var in sum_parameters:
+                    sum_parameters[var] = sum_parameters[var] + local_parameters[var]
+
+        # Global update
+        for var in global_parameters:
+            global_parameters[var] = (sum_parameters[var] / num_in_comm)
+
+        # Evaluate after every round of distributed training
+        best_mrr = 0
+        with torch.no_grad():        
+            results = evaluate(args, model, tokenizer, args.dataset['eval_data_file'], eval_when_training=True)
+            for key, value in results.items():
+                logger.info("  %s = %s", key, round(value,4))         
+            # Save the best model
+            if results['eval_mrr'] > best_mrr:
+                best_mrr = results['eval_mrr']
+                logger.info("  " + "*" * 20)  
+                logger.info("  Best mrr:%s",round(best_mrr,4))
+                logger.info("  " + "*" * 20)                          
+
+                checkpoint_prefix = 'checkpoint-best-mrr'
+                output_dir = os.path.join(args.dataset['output_dir'], '{}'.format(checkpoint_prefix))                        
+                if not os.path.exists(output_dir):
+                    os.makedirs(output_dir)                        
+                model_to_save = model.module if hasattr(model,'module') else model
+                output_dir = os.path.join(output_dir, '{}'.format('model.bin')) 
+                torch.save(model_to_save.state_dict(), output_dir)
+                logger.info("Saving model checkpoint to %s", output_dir)
 
 
 def train(args, model, tokenizer):
@@ -34,23 +103,19 @@ def train(args, model, tokenizer):
     # model.resize_token_embeddings(len(tokenizer))
     model.zero_grad()
     model.train()
-    print('--------------id:1-------------------')
     tr_num, tr_loss, best_mrr = 0, 0, 0 
     for idx in range(args.dataset['num_train_epochs']): 
         for step, batch in enumerate(train_dataloader):
-            print('--------------------id:2---------------------')
             # Get inputs
             code_inputs = batch[0].to(args.device)    
             nl_inputs = batch[1].to(args.device)
             # Get code and nl vectors
             code_vec = model(code_inputs = code_inputs)
             nl_vec = model(nl_inputs = nl_inputs)   
-            print('--------------------id:3---------------------')
             # Calculate scores and loss
-            scores = torch.einsum("ab, cb->ac",nl_vec,code_vec)
+            scores = torch.einsum("ab, cb->ac", nl_vec, code_vec)
             loss_fct = CrossEntropyLoss()
             loss = loss_fct(scores * 20, torch.arange(code_inputs.size(0), device=scores.device))
-            print('---------------------id:4--------------------')
             # Report loss
             tr_loss += loss.item()
             tr_num += 1
@@ -58,7 +123,6 @@ def train(args, model, tokenizer):
                 logger.info("epoch {} step {} loss {}".format(idx, step+1, round(tr_loss/tr_num,5)))
                 tr_loss = 0
                 tr_num = 0
-            print('--------------id:5-------------------')
             # Backward
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
