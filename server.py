@@ -1,10 +1,11 @@
 import hydra
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 import logging
 import os
 from easydict import EasyDict
 import numpy as np
 import tqdm
+import wandb
 
 from model_pipeline.model import Model
 from model_pipeline.train import distributed_train, evaluate
@@ -20,6 +21,13 @@ def main(args: EasyDict) -> None:
     # Set log
     logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
                         datefmt='%m/%d/%Y %H:%M:%S', level=logging.INFO )
+    
+    wandb.init(
+        project = args.project_name,
+        name = f"{args.dataset_name} with train_batchsize({args.train_batch_size}), rounds({args.training['num_comm']}) and {args.training['num_of_clients']}x{args.training['cfraction']}",
+        config = OmegaConf.to_container(args, resolve=True, throw_on_missing=True),
+        save_code=True
+    )
     
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -66,6 +74,7 @@ def evaluate_and_log_results(args, model, tokenizer, data_file):
     logger.info("***** Eval results *****")
     for key in sorted(result.keys()):
         logger.info("  %s = %s", key, str(round(result[key], 3)))
+        wandb.log({"{}".format(key): str(round(result[key], 3))})
 
 if __name__ == "__main__":
     main()

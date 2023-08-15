@@ -1,6 +1,7 @@
 import numpy as np
 import logging
 import torch
+import wandb
 from torch.nn import CrossEntropyLoss, MSELoss
 from torch.utils.data import DataLoader, random_split, RandomSampler
 from transformers import (WEIGHTS_NAME, get_linear_schedule_with_warmup)
@@ -45,6 +46,7 @@ class client(object):
                 tr_num += 1
                 if (step + 1) % 100 == 0:
                     logger.info("epoch {} step {} loss {}".format(epoch, step+1, round(tr_loss/tr_num,5)))
+                    wandb.log({"epoch": epoch, "step": step+1, "loss": round(tr_loss/tr_num, 5)})
                     tr_loss = 0
                     tr_num = 0
                 

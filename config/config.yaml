@@ -6,11 +6,13 @@ defaults:
     - training: normal
 
 model_name_or_path: microsoft/unixcoder-base
+project_name: "CS+FL"
+dataset_name: 'AdvTest_Finetune_train'
 
 code_length: 256
 nl_length: 128
 
-train_batch_size: 2
+train_batch_size: 16
 eval_batch_size: 64
 learning_rate: 0.03125
 max_grad_norm: 1.0    
@@ -18,3 +20,5 @@ max_grad_norm: 1.0
 seed: 42
 n_gpu: 1
 device: 'cpu'
+
+
