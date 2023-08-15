@@ -1,8 +1,11 @@
 import numpy as np
+import logging
 import torch
 from torch.nn import CrossEntropyLoss, MSELoss
 from torch.utils.data import DataLoader, random_split, RandomSampler
 from transformers import (WEIGHTS_NAME, get_linear_schedule_with_warmup)
+
+logger = logging.getLogger(__name__)                        
 
 class client(object):
     def __init__(self, local_dataset, dev):
@@ -35,6 +38,16 @@ class client(object):
                 loss = loss_fct(scores * 20, torch.arange(code_inputs.size(0), device=scores.device))
                 # Backward
                 loss.backward()
+                
+                #report loss
+                tr_num, tr_loss = 0, 0
+                tr_loss += loss.item()
+                tr_num += 1
+                if (step + 1) % 100 == 0:
+                    logger.info("epoch {} step {} loss {}".format(epoch, step+1, round(tr_loss/tr_num,5)))
+                    tr_loss = 0
+                    tr_num = 0
+                
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
                 optimizer.step()
                 optimizer.zero_grad()

@@ -44,6 +44,7 @@ def distributed_train(args, model, tokenizer):
         # Local update
         sum_parameters = None
         for client in (clients_in_comm):
+            logger.info("   {} running now!".format(client))
             local_parameters = myClients.clients_set[client].localUpdate(
                 model, args.dataset['num_train_epochs'], args.train_batch_size, 
                 args.learning_rate, args.max_grad_norm, global_parameters)

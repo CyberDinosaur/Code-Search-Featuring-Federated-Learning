@@ -1,0 +1,4 @@
+num_comm: 1
+num_of_clients: 1
+cfraction: 1
+isIID: true
