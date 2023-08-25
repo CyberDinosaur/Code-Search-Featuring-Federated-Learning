@@ -3,6 +3,7 @@ import os
 import torch
 import numpy as np
 import tqdm
+import wandb
 
 from model_pipeline.data import TextDataset
 from model_pipeline.clients import ClientsGroup
@@ -47,7 +48,8 @@ def distributed_train(args, model, tokenizer):
             logger.info("   {} running now!".format(client))
             local_parameters = myClients.clients_set[client].localUpdate(
                 model, args.dataset['num_train_epochs'], args.train_batch_size, 
-                args.learning_rate, args.max_grad_norm, global_parameters)
+                args.learning_rate, args.max_grad_norm, args.training['mu'], global_parameters, 
+                args.isWANDB, args.training['method_name'])
             if sum_parameters is None:
                 sum_parameters = {}
                 for key, var in local_parameters.items():
@@ -65,7 +67,11 @@ def distributed_train(args, model, tokenizer):
         with torch.no_grad():        
             results = evaluate(args, model, tokenizer, args.dataset['eval_data_file'], eval_when_training=True)
             for key, value in results.items():
-                logger.info("  %s = %s", key, round(value,4))         
+                logger.info("  %s = %s", key, round(value,4))     
+                 
+            if args.isWANDB:
+                wandb.log({"evaluate_mrr/round": results['eval_mrr']})   
+                
             # Save the best model
             if results['eval_mrr'] > best_mrr:
                 best_mrr = results['eval_mrr']

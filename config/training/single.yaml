@@ -2,3 +2,6 @@ num_comm: 1
 num_of_clients: 1
 cfraction: 1
 isIID: true
+method_name: "FedProx"
+
+mu: 0.005  # null for method other than fedprox

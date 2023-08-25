@@ -15,7 +15,7 @@ class client(object):
         self.dev = dev
         self.local_parameters = None
 
-    def localUpdate(self, model, local_epochs, local_batchsize, learning_rate, max_grad_norm, global_parameters):
+    def localUpdate(self, model, local_epochs, local_batchsize, learning_rate, max_grad_norm, mu, global_parameters, isWANDB, method):
         """ Update local parameters"""
         model.load_state_dict(global_parameters, strict=True)  # init local model according to serve's parameters
         train_sampler = RandomSampler(self.train_ds)
@@ -36,17 +36,41 @@ class client(object):
                 # Calculate scores and loss
                 scores = torch.einsum("ab, cb->ac", nl_vec, code_vec)
                 loss_fct = CrossEntropyLoss()
-                loss = loss_fct(scores * 20, torch.arange(code_inputs.size(0), device=scores.device))
-                # Backward
-                loss.backward()
                 
-                #report loss
+                if method == 'FedAvg':
+                    total_loss = loss_fct(scores * 20, torch.arange(code_inputs.size(0), device=scores.device))
+                    
+                elif method == 'FedProx':
+                    original_loss = loss_fct(scores * 20, torch.arange(code_inputs.size(0), device=scores.device))
+                    proximal_term = 0.0
+                    for param_name, param in model.named_parameters():
+                        # Make sure we don't add proximal term for bias terms
+                        if 'bias' not in param_name:
+                            global_param = global_parameters[param_name]
+                            proximal_term += torch.sum((param - global_param).pow(2))
+                    proximal_term *= mu / 2
+                    total_loss = original_loss + proximal_term
+                    
+                elif method == 'FedNova':
+                    original_loss = loss_fct(scores * 20, torch.arange(code_inputs.size(0), device=scores.device))
+                    momentum_term = 0.0
+                    for param_name, param in model.named_parameters():
+                        global_param = global_parameters[param_name]
+                        momentum_term += torch.sum((param - global_param).pow(2))
+                    momentum_term *= mu
+                    total_loss = original_loss + momentum_term
+
+                # Backward
+                total_loss.backward()
+
+                # Report loss
                 tr_num, tr_loss = 0, 0
-                tr_loss += loss.item()
+                tr_loss += total_loss.item()
                 tr_num += 1
                 if (step + 1) % 100 == 0:
                     logger.info("epoch {} step {} loss {}".format(epoch, step+1, round(tr_loss/tr_num,5)))
-                    wandb.log({"epoch": epoch, "step": step+1, "loss": round(tr_loss/tr_num, 5)})
+                    if isWANDB:
+                        wandb.log({"loss": round(tr_loss/tr_num, 5)})
                     tr_loss = 0
                     tr_num = 0
                 
