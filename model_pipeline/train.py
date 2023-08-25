@@ -44,7 +44,15 @@ def distributed_train(args, model, tokenizer):
         for key, var in model.state_dict().items():
             control_parameters[key] = torch.zeros_like(var)
 
-        
+    # Local Differential Privacy Configuration
+    epsilon = args.training['epsilon']  # Privacy budget
+    delta = args.training['delta']  # Delta parameter for (ε, δ)-Differential Privacy
+    sensitivity = args.training['sensitivity']  # Sensitivity of the data
+
+    noise_scale = sensitivity / epsilon
+    gaussian_noise_stddev = np.sqrt(2 * np.log(1.25 / delta)) * (sensitivity / epsilon)
+
+
     for i in range(args.training['num_comm']):
         logger.info("Communicate round {}".format(i+1))
         # Pick clients_in_comm
@@ -53,8 +61,7 @@ def distributed_train(args, model, tokenizer):
 
         # Assign malicious clients
         num_malicious = int(np.ceil(args.training['malicious_prob'] * len(clients_in_comm)))
-        # malicious_clients = np.random.choice(clients_in_comm, num_malicious, replace=False)
-        malicious_clients = ['client0']
+        malicious_clients = np.random.choice(clients_in_comm, num_malicious, replace=False)
         logger.info(" Malicious clients: {}".format(malicious_clients))
 
         sum_parameters = None
@@ -75,6 +82,18 @@ def distributed_train(args, model, tokenizer):
                     model, args.dataset['num_train_epochs'], args.train_batch_size,
                     args.learning_rate, args.max_grad_norm, args.training['mu'], global_parameters,
                     control_parameters, args.isWANDB, args.training['method_name'])
+            
+            # Add dif privacy
+            if args.training['isDIF'] == 'laplace':
+                for key in local_parameters.keys():
+                    laplace_noise = torch.tensor(np.random.laplace(0, noise_scale, local_parameters[key].shape))
+                    local_parameters[key] += laplace_noise
+            elif args.training['isDIF'] == 'gaussian':
+                for key in local_parameters.keys():
+                    gaussian_noise = torch.tensor(np.random.normal(0, gaussian_noise_stddev, local_parameters[key].shape))
+                    local_parameters[key] += gaussian_noise
+            else:
+                pass
 
             # After local update, check if this client is malicious.
             if client in malicious_clients:
@@ -82,7 +101,6 @@ def distributed_train(args, model, tokenizer):
                 
                 for key in local_parameters.keys():
                     local_parameters[key] *= -1.0
-
 
             if sum_parameters is None:
                 sum_parameters = {}

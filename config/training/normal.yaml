@@ -1,8 +1,16 @@
 num_comm: 5
 num_of_clients: 5
 cfraction: 1
-malicious_prob: 0.1
+
+malicious_prob: 0
+
 isIID: true
+
+isDIF: 'laplace' # laplace gaussian
+epsilon: 1.0
+delta: 1e-5
+sensitivity: 1.0
+
 method_name: "SCAFFOLD"  # FedAvg FedProx FedNova SCAFFOLD
 
 mu: 0.005  # null for method other than fedprox
