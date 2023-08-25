@@ -1,6 +1,7 @@
 num_comm: 1
 num_of_clients: 1
 cfraction: 1
+malicious_prob: 0.1
 isIID: true
 method_name: "FedProx"
 

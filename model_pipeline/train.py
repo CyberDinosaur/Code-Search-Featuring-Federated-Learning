@@ -32,35 +32,97 @@ def distributed_train(args, model, tokenizer):
     model.zero_grad()
     model.train()
     
+
     # Create Global parameters and Update global parameters distributively
     global_parameters = {}
     for key, var in model.state_dict().items():
         global_parameters[key] = var.clone()
+    
+    # Initialize control params (only need in SCAFFOLD)
+    if args.training['method_name'] == 'SCAFFOLD':
+        control_parameters = {}
+        for key, var in model.state_dict().items():
+            control_parameters[key] = torch.zeros_like(var)
+
         
     for i in range(args.training['num_comm']):
         logger.info("Communicate round {}".format(i+1))
         # Pick clients_in_comm
         order = np.random.permutation(args.training['num_of_clients'])
         clients_in_comm = ['client{}'.format(i) for i in order[0:num_in_comm]]
+
+        # Assign malicious clients
+        num_malicious = int(np.ceil(args.training['malicious_prob'] * len(clients_in_comm)))
+        # malicious_clients = np.random.choice(clients_in_comm, num_malicious, replace=False)
+        malicious_clients = ['client0']
+        logger.info(" Malicious clients: {}".format(malicious_clients))
+
+        sum_parameters = None
+        sum_control = None if args.training['method_name'] == 'SCAFFOLD' else None
+
         # Local update
         sum_parameters = None
         for client in (clients_in_comm):
             logger.info("   {} running now!".format(client))
-            local_parameters = myClients.clients_set[client].localUpdate(
-                model, args.dataset['num_train_epochs'], args.train_batch_size, 
-                args.learning_rate, args.max_grad_norm, args.training['mu'], global_parameters, 
-                args.isWANDB, args.training['method_name'])
+
+            if args.training['method_name'] == 'FedAvg':
+                local_parameters = myClients.clients_set[client].localUpdate(
+                    model, args.dataset['num_train_epochs'], args.train_batch_size,
+                    args.learning_rate, args.max_grad_norm, args.training['mu'], global_parameters,
+                    args.isWANDB, args.training['method_name'])
+            else:  # SCAFFOLD
+                local_parameters, local_control = myClients.clients_set[client].localUpdate(
+                    model, args.dataset['num_train_epochs'], args.train_batch_size,
+                    args.learning_rate, args.max_grad_norm, args.training['mu'], global_parameters,
+                    control_parameters, args.isWANDB, args.training['method_name'])
+
+            # After local update, check if this client is malicious.
+            if client in malicious_clients:
+                logger.info(f"{client} is malicious!")
+                
+                for key in local_parameters.keys():
+                    local_parameters[key] *= -1.0
+
+
             if sum_parameters is None:
                 sum_parameters = {}
                 for key, var in local_parameters.items():
                     sum_parameters[key] = var.clone()
+                
+                if args.training['method_name'] == 'SCAFFOLD':
+                    sum_control = {}
+                    for key, var in local_control.items():
+                        sum_control[key] = var.clone()
             else:
-                for var in sum_parameters:
-                    sum_parameters[var] = sum_parameters[var] + local_parameters[var]
+                for key in sum_parameters.keys():
+                    sum_parameters[key] += local_parameters[key]
+                    
+                    if args.training['method_name'] == 'SCAFFOLD':
+                        sum_control[key] += local_control[key]
+
+            # local_parameters = myClients.clients_set[client].localUpdate(
+            #     model, args.dataset['num_train_epochs'], args.train_batch_size, 
+            #     args.learning_rate, args.max_grad_norm, args.training['mu'], global_parameters, 
+            #     args.isWANDB, args.training['method_name'])
+            # if sum_parameters is None:
+            #     sum_parameters = {}
+            #     for key, var in local_parameters.items():
+            #         sum_parameters[key] = var.clone()
+            # else:
+            #     for var in sum_parameters:
+            #         sum_parameters[var] = sum_parameters[var] + local_parameters[var]
 
         # Global update
-        for var in global_parameters:
-            global_parameters[var] = (sum_parameters[var] / num_in_comm)
+        if args.training['method_name'] == 'FedAvg':
+            for key in global_parameters.keys():
+                global_parameters[key] = sum_parameters[key] / num_in_comm
+        else:  # SCAFFOLD
+            for key in global_parameters.keys():
+                global_parameters[key] -= control_parameters[key]
+                global_parameters[key] += sum_parameters[key] / num_in_comm
+                control_parameters[key] = sum_control[key] / num_in_comm
+        # for var in global_parameters:
+        #     global_parameters[var] = (sum_parameters[var] / num_in_comm)
 
         # Evaluate after every round of distributed training
         best_mrr = 0

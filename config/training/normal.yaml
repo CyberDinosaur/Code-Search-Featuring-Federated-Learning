@@ -1,7 +1,8 @@
 num_comm: 5
 num_of_clients: 5
 cfraction: 1
+malicious_prob: 0.1
 isIID: true
-method_name: "FedNova"  # FedAvg FedProx FedNova
+method_name: "SCAFFOLD"  # FedAvg FedProx FedNova SCAFFOLD
 
 mu: 0.005  # null for method other than fedprox

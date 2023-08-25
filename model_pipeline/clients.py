@@ -15,15 +15,21 @@ class client(object):
         self.dev = dev
         self.local_parameters = None
 
-    def localUpdate(self, model, local_epochs, local_batchsize, learning_rate, max_grad_norm, mu, global_parameters, isWANDB, method):
+    def localUpdate(self, model, local_epochs, local_batchsize, learning_rate, max_grad_norm, mu, global_parameters, control_parameters=None, isWANDB=False, method='FedAvg'):
         """ Update local parameters"""
         model.load_state_dict(global_parameters, strict=True)  # init local model according to serve's parameters
         train_sampler = RandomSampler(self.train_ds)
         self.train_dl = DataLoader(self.train_ds, sampler=train_sampler, batch_size=local_batchsize)
-        
+
         # Create optimizer and scheduler
         optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, eps=1e-8)
-        scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps = 0, num_training_steps = len(self.train_dl) * local_epochs)
+        scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=0, num_training_steps=len(self.train_dl) * local_epochs)
+
+        local_control = None
+        if method == 'SCAFFOLD':
+            local_control = {}
+            for key, var in model.state_dict().items():
+                local_control[key] = torch.zeros_like(var)
 
         for epoch in range(local_epochs):
             for step, batch in enumerate(self.train_dl):
@@ -37,7 +43,7 @@ class client(object):
                 scores = torch.einsum("ab, cb->ac", nl_vec, code_vec)
                 loss_fct = CrossEntropyLoss()
                 
-                if method == 'FedAvg':
+                if method == 'FedAvg' or method == 'SCAFFOLD':
                     total_loss = loss_fct(scores * 20, torch.arange(code_inputs.size(0), device=scores.device))
                     
                 elif method == 'FedProx':
@@ -75,12 +81,19 @@ class client(object):
                     tr_num = 0
                 
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+                if method == 'SCAFFOLD':
+                    for name, param in model.named_parameters():
+                        if param.grad is not None:
+                            local_control[name] += param.grad - control_parameters[name]
                 optimizer.step()
                 optimizer.zero_grad()
                 scheduler.step()
 
-        return model.state_dict()
-
+                
+        if method == 'SCAFFOLD':
+            return model.state_dict(), local_control
+        else:
+            return model.state_dict()
 
 class ClientsGroup(object):
     def __init__(self, full_dataset, isIID, num_clients, dev):
