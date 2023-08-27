@@ -2,8 +2,9 @@ import numpy as np
 import logging
 import torch
 import wandb
+import random
 from torch.nn import CrossEntropyLoss, MSELoss
-from torch.utils.data import DataLoader, random_split, RandomSampler
+from torch.utils.data import DataLoader, random_split, RandomSampler, Subset
 from transformers import (WEIGHTS_NAME, get_linear_schedule_with_warmup)
 
 logger = logging.getLogger(__name__)                        
@@ -120,7 +121,26 @@ class ClientsGroup(object):
 
             subdatasets = random_split(self.full_dataset, subdataset_sizes)
         else:
-            pass
+            # Create a dictionary to store indices for each unique URL
+            url_to_indices = {}
+            for idx, example in enumerate(self.full_dataset.examples):
+                url = example.url
+                if url not in url_to_indices:
+                    url_to_indices[url] = []
+                url_to_indices[url].append(idx)
+
+            # Create a list of URLs, then shuffle them to randomize client assignments
+            unique_urls = list(url_to_indices.keys())
+            random.shuffle(unique_urls)
+
+            # Distribute URLs to clients
+            subdatasets_indices = [[] for _ in range(num_subdatasets)]
+            for i, url in enumerate(unique_urls):
+                client_idx = i % num_subdatasets
+                subdatasets_indices[client_idx].extend(url_to_indices[url])
+
+            # Convert indices to actual Subset
+            subdatasets = [Subset(self.full_dataset, indices) for indices in subdatasets_indices]
 
         for i, subdataset in enumerate(subdatasets):
             someone = client(subdataset, self.dev)
