@@ -3,7 +3,7 @@ _version: 1.2
 defaults:
     - _self_
     - dataset: AdvTest_Finetune_train
-    - training: normal
+    - training: single
 
 model_name_or_path: microsoft/unixcoder-base
 project_name: "CS+FL"
@@ -13,7 +13,7 @@ isWANDB: false
 code_length: 256
 nl_length: 128
 
-train_batch_size: 32
+train_batch_size: 1
 eval_batch_size: 64
 learning_rate: 2e-5
 max_grad_norm: 1.0    

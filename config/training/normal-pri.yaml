@@ -1,0 +1,16 @@
+num_comm: 100
+num_of_clients: 50
+cfraction: 0.5
+
+malicious_prob: 0
+
+isIID: false
+
+isDIF: 'laplace' # laplace gaussian non
+epsilon: 1.0
+delta: 1e-5
+sensitivity: 1.0
+
+method_name: "FedAvg"  # FedAvg FedProx FedNova SCAFFOLD
+
+mu: 0.005  # null for method other than fedprox

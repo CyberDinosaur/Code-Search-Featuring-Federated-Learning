@@ -1,12 +1,16 @@
 num_comm: 1
 num_of_clients: 1
 cfraction: 1
-malicious_prob: 0.1
-isIID: true
-isDIF: 'laplace'
+
+malicious_prob: 0
+
+isIID: false
+
+isDIF: 'non'
 epsilon: 1.0
 delta: 1e-5
 sensitivity: 1.0
-method_name: "FedProx"
+
+method_name: "FedAvg"
 
 mu: 0.005  # null for method other than fedprox

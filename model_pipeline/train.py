@@ -31,7 +31,6 @@ def distributed_train(args, model, tokenizer):
     logger.info("  Train batch size for each client = %d", args.train_batch_size)
     model.zero_grad()
     model.train()
-    
 
     # Create Global parameters and Update global parameters distributively
     global_parameters = {}
@@ -72,16 +71,16 @@ def distributed_train(args, model, tokenizer):
         for client in (clients_in_comm):
             logger.info("   {} running now!".format(client))
 
-            if args.training['method_name'] == 'FedAvg':
+            if args.training['method_name'] != 'SCAFFOLD':
                 local_parameters = myClients.clients_set[client].localUpdate(
                     model, args.dataset['num_train_epochs'], args.train_batch_size,
                     args.learning_rate, args.max_grad_norm, args.training['mu'], global_parameters,
-                    args.isWANDB, args.training['method_name'])
+                    isWANDB=args.isWANDB, method=args.training['method_name'])
             else:  # SCAFFOLD
                 local_parameters, local_control = myClients.clients_set[client].localUpdate(
                     model, args.dataset['num_train_epochs'], args.train_batch_size,
                     args.learning_rate, args.max_grad_norm, args.training['mu'], global_parameters,
-                    control_parameters, args.isWANDB, args.training['method_name'])
+                    control_parameters=control_parameters, isWANDB=args.isWANDB, method=args.training['method_name'])
             
             # Add dif privacy
             if args.training['isDIF'] == 'laplace':
