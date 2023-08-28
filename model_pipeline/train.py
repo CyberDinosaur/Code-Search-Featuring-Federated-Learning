@@ -130,7 +130,7 @@ def distributed_train(args, model, tokenizer):
             #         sum_parameters[var] = sum_parameters[var] + local_parameters[var]
 
         # Global update
-        if args.training['method_name'] == 'FedAvg':
+        if args.training['method_name'] != 'SCAFFOLD':
             for key in global_parameters.keys():
                 global_parameters[key] = sum_parameters[key] / num_in_comm
         else:  # SCAFFOLD
